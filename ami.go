@@ -36,6 +36,7 @@ type amiAdapter struct {
 	password   string
 
 	connected     bool
+	reconnect     bool
 	actionTimeout time.Duration
 	dialTimeout   time.Duration
 
@@ -55,6 +56,7 @@ func newAMIAdapter(s *Settings, eventEmitter func(string, string)) (*amiAdapter,
 	a.dialTimeout = s.DialTimeout
 	a.mutex = &sync.RWMutex{}
 	a.emitEvent = eventEmitter
+	a.reconnect = true
 
 	a.actionsChan = make(chan map[string]string)
 	a.responseChans = make(map[string]chan map[string]string)
@@ -63,7 +65,13 @@ func newAMIAdapter(s *Settings, eventEmitter func(string, string)) (*amiAdapter,
 
 	go func() {
 		for {
+			if !a.reconnect {
+				break
+			}
 			func() {
+				if !a.reconnect {
+					return
+				}
 				a.id = nextID()
 				var err error
 				var conn net.Conn
@@ -306,6 +314,8 @@ func (a *amiAdapter) openConnection() (net.Conn, error) {
 func readMessage(r *bufio.Reader) (m map[string]string, err error) {
 	m = make(map[string]string)
 	var responseFollows bool
+	var outputExist = false
+
 	for {
 		kv, _, err := r.ReadLine()
 		if len(kv) == 0 {
@@ -356,7 +366,12 @@ func readMessage(r *bufio.Reader) (m map[string]string, err error) {
 			responseFollows = true
 		}
 
-		m[key] = value
+		if key == "Output" && !outputExist {
+			m["RealOutput"] = value
+			outputExist = true
+		} else {
+			m[key] = value
+		}
 
 		if err != nil {
 			return m, err
@@ -393,7 +408,7 @@ func (a *amiAdapter) reader(conn net.Conn, stop <-chan struct{}, readErrChan cha
 			}
 
 			event["#"] = strconv.Itoa(i)
-			event["Time"] = time.Now().Format(time.RFC3339Nano)
+			event["TimeReceived"] = time.Now().Format(time.RFC3339Nano)
 			chanEvents <- event
 		}
 	}()

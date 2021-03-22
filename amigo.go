@@ -99,6 +99,9 @@ func (a *Amigo) Action(action map[string]string) (map[string]string, error) {
 		return e, nil
 	}
 
+	if (strings.ToLower(action["Action"]) == "logoff") {
+		a.ami.reconnect = false;
+	}
 	return result, nil
 }
 
@@ -284,6 +287,11 @@ func (a *Amigo) UnregisterDefaultHandler(f handlerFunc) error {
 	}
 	a.defaultHandler = nil
 	return nil
+}
+
+// EventsChanLength returns the current size of eventsChan
+func (a *Amigo) EventsChanLength() int {
+	return len(a.ami.eventsChan)
 }
 
 // UnregisterHandler removes handler function for provided event name
